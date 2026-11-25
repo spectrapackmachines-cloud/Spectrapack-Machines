@@ -186,6 +186,7 @@ export async function fetchMetaSpendCap(): Promise<{ account: string; name: stri
   if (!/^\d+$/.test(account) || !/^v\d+\.0$/.test(version) || !process.env.META_ADS_ACCESS_TOKEN?.trim()) return null;
   try {
     const result = await providerJson(`https://graph.facebook.com/${version}/act_${account}?fields=account_id,name,currency,spend_cap,amount_spent,balance`, { headers: { Authorization: `Bearer ${process.env.META_ADS_ACCESS_TOKEN}` } });
+    if ([result.spend_cap,result.amount_spent,result.balance].some(value=>value==null||value==='')) return null;
     const cap = Number(result.spend_cap || 0);
     const spent = Number(result.amount_spent || 0);
     const balanceDue = Number(result.balance || 0);

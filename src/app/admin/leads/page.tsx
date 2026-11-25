@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import QuickAssign from '@/components/admin/QuickAssign';
 import {
   CRM_ACTIVITY_LABELS,
   CRM_ACTIVITY_TYPES,
@@ -114,7 +115,6 @@ type LeadDraft = {
   message: string;
   status: LeadStatus;
   priority: CrmPriority;
-  assignedTo: string;
   nextFollowUpAt: string;
   estimatedValue: string;
 };
@@ -149,7 +149,6 @@ const toLeadDraft = (lead: CrmLead): LeadDraft => ({
   message: lead.message,
   status: lead.status,
   priority: lead.priority,
-  assignedTo: lead.assignedTo,
   nextFollowUpAt: toLocalDateTimeValue(lead.nextFollowUpAt),
   estimatedValue: lead.estimatedValue === null ? '' : String(lead.estimatedValue),
 });
@@ -495,6 +494,12 @@ export default function SalesCrmPage() {
     if (selectedLeadRef.current === lead.id) setLeadDraft(toLeadDraft(lead));
   };
 
+  const assignmentSaved = (lead: CrmLead) => {
+    workspaceMutationRef.current += 1;
+    setWorkspace(current => current ? { ...current, leads: current.leads.map(item => item.id === lead.id ? lead : item) } : current);
+    // Assignment saves independently; keep any customer/stage edits in the drawer.
+  };
+
   const moveLeadToStage = async (lead: CrmLead, status: LeadStatus) => {
     if (lead.status === status || updatingStageLead) return;
     setUpdatingStageLead(lead.id);
@@ -580,10 +585,11 @@ export default function SalesCrmPage() {
     }
   };
 
-  const openManualLead = () => {
-    setManualLead({ ...newManualLead(), assignedTo: viewer?.userId || activeTeam[0]?.userId || '' });
+  const defaultAssignee = viewer?.userId || activeTeam[0]?.userId || '';
+  const openManualLead = useCallback(() => {
+    setManualLead({ ...newManualLead(), assignedTo: defaultAssignee });
     setAddOpen(true);
-  };
+  }, [defaultAssignee]);
 
   useEffect(() => {
     if (!viewer?.userId || initialQueryApplied.current) return;
@@ -600,7 +606,7 @@ export default function SalesCrmPage() {
       window.history.replaceState({}, '', window.location.pathname);
     }
     initialQueryApplied.current = true;
-  }, [ownerAccess, viewer?.userId]);
+  }, [ownerAccess, viewer?.userId, openManualLead]);
 
   const addEmployee = async (event: FormEvent) => {
     event.preventDefault();
@@ -781,6 +787,7 @@ export default function SalesCrmPage() {
                       <span className={styles.pipelineCardMeta}><span>{channelLabel(lead)}</span><b>{formatMoney(lead.estimatedValue)}</b></span>
                       <span className={styles.pipelineCardOwner}><span className={styles.miniAvatar}>{lead.assigneeName.slice(0, 1).toUpperCase()}</span>{lead.assigneeName}<span>{lead.nextFollowUpAt ? `Follow-up ${formatDateTime(lead.nextFollowUpAt)}` : 'Follow-up not set'}</span></span>
                     </button>
+                    {ownerAccess && <QuickAssign lead={lead} team={team} onAssigned={assignmentSaved} disabled={savingLead} />}
                     <label className={styles.pipelineMove}>Move to<select aria-label={`Move ${lead.name} to another stage`} value={lead.status} disabled={updatingStageLead === lead.id} onChange={(event) => void moveLeadToStage(lead, event.target.value as LeadStatus)}>{LEAD_STATUSES.filter((item) => item !== 'spam').map((item) => <option key={item} value={item}>{LEAD_STATUS_LABELS[item]}</option>)}</select></label>
                   </article>)}
                   {stageLeads.length === 0 && <p className={styles.pipelineEmpty}>No leads in this stage</p>}
@@ -792,10 +799,10 @@ export default function SalesCrmPage() {
           <div className={styles.leadTable}>
             <div className={styles.tableHeader}><span>Customer</span><span>Requirement</span><span>Owner</span><span>Stage</span><span>Next follow-up</span><span /></div>
             {filteredLeads.map((lead) => (
-              <article key={lead.id} tabIndex={0} role="button" aria-label={`Open lead: ${lead.name}`} className={`${styles.leadRow} ${!lead.read ? styles.unreadLead : ''} ${isOverdue(lead) ? styles.overdueLead : ''}`} onClick={() => void openLead(lead)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void openLead(lead); } }}>
-                <div className={styles.customerCell}><div className={styles.rowTitle}><strong>{lead.name}</strong>{!lead.read && <span className={styles.newDot}>New</span>}</div><span>{lead.company || lead.phone || lead.email || 'No company'}</span><small>{channelLabel(lead)} · {sourceLabel(lead.source)}</small>{lead.attribution?.utmCampaign && <small title={lead.attribution.utmCampaign}>Campaign: {lead.attribution.utmCampaign}</small>}</div>
+              <article key={lead.id} className={`${styles.leadRow} ${!lead.read ? styles.unreadLead : ''} ${isOverdue(lead) ? styles.overdueLead : ''}`} onClick={() => void openLead(lead)}>
+                <div className={styles.customerCell}><div className={styles.rowTitle}><button type="button" className={styles.rowOpen} aria-label={`Open lead: ${lead.name}`} onClick={event=>{event.stopPropagation();void openLead(lead);}}>{lead.name}</button>{!lead.read && <span className={styles.newDot}>New</span>}</div><span>{lead.company || lead.phone || lead.email || 'No company'}</span><small>{channelLabel(lead)} · {sourceLabel(lead.source)}</small>{lead.attribution?.utmCampaign && <small title={lead.attribution.utmCampaign}>Campaign: {lead.attribution.utmCampaign}</small>}</div>
                 <div className={styles.requirementCell}><strong>{lead.machineInterest || 'General enquiry'}</strong><span>{formatMoney(lead.estimatedValue)}</span><small className={`${styles.priority} ${styles[`priority_${lead.priority}`]}`}>{CRM_PRIORITY_LABELS[lead.priority]}</small></div>
-                <div className={styles.ownerCell}><span className={styles.miniAvatar}>{lead.assigneeName.slice(0, 1).toUpperCase()}</span><span>{lead.assigneeName}</span></div>
+                <div className={styles.ownerCell}>{ownerAccess ? <QuickAssign lead={lead} team={team} onAssigned={assignmentSaved} disabled={savingLead} /> : <><span className={styles.miniAvatar}>{lead.assigneeName.slice(0, 1).toUpperCase()}</span><span>{lead.assigneeName}</span></>}</div>
                 <div><span className={`${styles.statusBadge} ${styles[`status_${lead.status}`]}`}>{LEAD_STATUS_LABELS[lead.status]}</span></div>
                 <div className={`${styles.followUpCell} ${isOverdue(lead) ? styles.followUpOverdue : ''}`}><CalendarClock size={15} /><span>{lead.nextFollowUpAt ? formatDateTime(lead.nextFollowUpAt) : 'Not scheduled'}</span></div>
                 <ChevronRight size={18} className={styles.rowChevron} />
@@ -898,7 +905,7 @@ export default function SalesCrmPage() {
                 <label><span>Priority</span><select value={leadDraft.priority} onChange={(event) => setLeadDraft({ ...leadDraft, priority: event.target.value as CrmPriority })}>{CRM_PRIORITIES.map((priority) => <option key={priority} value={priority}>{CRM_PRIORITY_LABELS[priority]}</option>)}</select></label>
                 <label className={styles.fullField}><span>Next follow-up (your local time)</span><div className={styles.inlineInput}><input type="datetime-local" value={leadDraft.nextFollowUpAt} onChange={(event) => setLeadDraft({ ...leadDraft, nextFollowUpAt: event.target.value })} />{leadDraft.nextFollowUpAt && <button type="button" onClick={() => setLeadDraft({ ...leadDraft, nextFollowUpAt: '' })}>Clear</button>}</div><span className={styles.followUpShortcuts}>{[1, 3, 7].map((days) => <button key={days} type="button" onClick={() => { const next = new Date(); next.setDate(next.getDate() + days); next.setHours(10, 0, 0, 0); setLeadDraft({ ...leadDraft, nextFollowUpAt: toLocalDateTimeValue(next.toISOString()) }); }}>{days === 1 ? 'Tomorrow, 10 AM' : `In ${days} days, 10 AM`}</button>)}</span></label>
                 <label><span>Estimated value (₹)</span><input type="number" min="0" step="1000" value={leadDraft.estimatedValue} onChange={(event) => setLeadDraft({ ...leadDraft, estimatedValue: event.target.value })} /></label>
-                {ownerAccess && <label><span>Assigned to</span><select value={leadDraft.assignedTo} onChange={(event) => setLeadDraft({ ...leadDraft, assignedTo: event.target.value })}><option value="">Unassigned</option>{activeTeam.map((member) => <option key={member.userId} value={member.userId}>{member.displayName}</option>)}</select></label>}
+                {ownerAccess && <div><span>Assigned employee · saves immediately</span><QuickAssign lead={selectedLead} team={team} onAssigned={assignmentSaved} disabled={savingLead}/></div>}
               </div>
 
               <div className={styles.drawerSectionTitle}><UserRound size={17} /><strong>Customer &amp; requirement</strong></div>

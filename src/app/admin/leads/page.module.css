@@ -364,3 +364,5 @@
   .advancedFilterControls { position: static; width: 100%; margin-top: 6px; justify-content: stretch; }
   .pipelineBoard { grid-auto-columns: minmax(245px, 82vw); margin: 0; }
 }
+
+.rowOpen{border:0;background:none;padding:4px 0;color:inherit;font:inherit;font-weight:750;text-align:left;cursor:pointer}.rowOpen:focus-visible{outline:2px solid var(--primary);outline-offset:3px}.pipelineCard>div{padding:0 .75rem .75rem}

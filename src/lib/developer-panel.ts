@@ -1,6 +1,8 @@
 import 'server-only';
 import { readIntegrationReport } from './crm-integrations';
 import { summarizeAds } from './integration-types';
+import { getGrowthResources, growthSummary, type DeveloperGrowthSummary } from './developer-growth';
+import { discoveryChannel } from './developer-growth-policy';
 
 import { getAdminDashboardData, type AdminDashboardData } from './admin-dashboard';
 import { withTimeout } from './async-timeout';
@@ -74,6 +76,7 @@ export type DeveloperAdvertisingSummary = {
 };
 
 export type DeveloperAnalyticsSummary = {
+  discovery: {organicVisitors:number;organicPageViews:number;organicLeads:number;aiVisitors:number;aiPageViews:number;aiLeads:number};
   status: 'available' | 'missing' | 'unavailable' | 'error';
   notice: string | null;
   windowDays: number;
@@ -118,6 +121,7 @@ export type DeveloperAnalyticsSummary = {
 };
 
 export type DeveloperPanelData = {
+  growth: DeveloperGrowthSummary;
   generatedAt: string;
   access: {
     mode: DeveloperAccessDecision['mode'];
@@ -176,6 +180,7 @@ const emptyAnalytics = (
   status: DeveloperAnalyticsSummary['status'],
   notice: string,
 ): DeveloperAnalyticsSummary => ({
+  discovery: {organicVisitors:0,organicPageViews:0,organicLeads:0,aiVisitors:0,aiPageViews:0,aiLeads:0},
   status,
   notice,
   windowDays: WINDOW_DAYS,
@@ -397,8 +402,13 @@ async function getAnalyticsSummary(): Promise<DeveloperAnalyticsSummary> {
     const paidVisitors = new Set(
       paidRows.map((row) => String(row.session_id || '').trim()).filter(Boolean),
     ).size;
+    const organicRows=rows.filter(row=>discoveryChannel(row.source,row.medium||'',isPaidAnalyticsEvent(row))==='organic');
+    const aiRows=rows.filter(row=>discoveryChannel(row.source,row.medium||'',isPaidAnalyticsEvent(row))==='ai');
+    const traffic=(items:AnalyticsEventRow[])=>({visitors:new Set(items.map(row=>row.session_id).filter(Boolean)).size,views:items.filter(row=>row.event_name==='page_view').length,leads:items.filter(row=>['generate_lead','lead_submit','lead_submitted'].includes(row.event_name)).length});
+    const organic=traffic(organicRows),ai=traffic(aiRows);
 
     return {
+      discovery:{organicVisitors:organic.visitors,organicPageViews:organic.views,organicLeads:organic.leads,aiVisitors:ai.visitors,aiPageViews:ai.views,aiLeads:ai.leads},
       status: 'available',
       notice:
         totalEvents > rows.length
@@ -588,11 +598,12 @@ const getSafeSiteHost = () => {
 export async function getDeveloperPanelData(
   access: DeveloperAccessDecision,
 ): Promise<DeveloperPanelData> {
-  const [dashboard, analytics, pipeline, adReport] = await Promise.all([
+  const [dashboard, analytics, pipeline, adReport, growthResources] = await Promise.all([
     getAdminDashboardData(),
     getAnalyticsSummary(),
     getLeadPipelineSummary(),
     readIntegrationReport().catch(() => null),
+    getGrowthResources(),
   ]);
   const googleSync = adReport?.syncs.find(item => item.provider === 'google');
   const googleConfigured = Boolean(adReport?.connections.find(item => item.name === 'google')?.configured);
@@ -634,6 +645,7 @@ export async function getDeveloperPanelData(
       : null;
 
   return {
+    growth: growthSummary(adReport,analytics,growthResources),
     generatedAt: new Date().toISOString(),
     access: {
       mode: access.mode,

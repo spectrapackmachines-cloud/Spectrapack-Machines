@@ -29,6 +29,7 @@ import type { DeveloperPanelData } from '@/lib/developer-panel';
 import { LEAD_STATUSES, LEAD_STATUS_LABELS } from '@/lib/lead-status';
 import styles from './page.module.css';
 import WorkforcePanel from './WorkforcePanel';
+import GrowthOverview from './GrowthOverview';
 
 type DeveloperPanelClientProps = {
   initialData: DeveloperPanelData;
@@ -194,6 +195,7 @@ export default function DeveloperPanelClient({ initialData }: DeveloperPanelClie
       <div className={styles.timestamp}>
         <Clock3 size={14} /> Last generated {formatDateTime(data.generatedAt)}
       </div>
+      <GrowthOverview data={data.growth} onRefresh={refresh}/>
       <WorkforcePanel />
 
       {data.access.fallbackWarning && (

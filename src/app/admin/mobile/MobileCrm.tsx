@@ -9,6 +9,7 @@ import { useWorkTracking, WorkTrackingStatus } from '@/components/admin/WorkTrac
 import MobileLead from './MobileLead';
 import NewLead from './NewLead';
 import styles from './mobile.module.css';
+import QuickAssign from '@/components/admin/QuickAssign';
 
 const finalStages = ['won','lost','spam'];
 export default function MobileCrm() {
@@ -56,6 +57,7 @@ export default function MobileCrm() {
         {tab === 'leads' && <div className={styles.filters}>{[['all','All leads'],['new','New'],['mine','Assigned to me']].map(([value,label]) => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}</div>}
         <div className={styles.list}>{matches.slice(0,limit).map(lead => <article className={styles.card} key={lead.id}>
           <button className={styles.openCard} onClick={() => open(lead)}><div><span className={styles.stage} data-stage={lead.status}>{LEAD_STATUS_LABELS[lead.status]}</span><h2>{lead.name}</h2><p>{lead.company || 'Customer enquiry'}</p><strong>{lead.machineInterest || 'Discuss packaging requirement'}</strong>{lead.nextFollowUpAt && <small className={due(lead) ? styles.due : ''}><CalendarDays size={13} />{new Date(lead.nextFollowUpAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</small>}</div><ChevronRight size={19} /></button>
+          {data.viewer.canManageTeam && <div className={styles.assignment}><QuickAssign lead={lead} team={data.team} onAssigned={update}/></div>}
           <div className={styles.cardActions}><button disabled={!lead.phone} onClick={() => open(lead,'call')}><Phone size={17} />Call</button><button disabled={!lead.phone} onClick={() => open(lead,'whatsapp')}><MessageCircle size={17} />WhatsApp</button><button disabled={!lead.email} onClick={() => open(lead,'email')}><Mail size={17} />Email</button></div>
         </article>)}</div>
         {!matches.length && <div className={styles.empty}><Inbox size={34} /><h2>{tab === 'today' ? 'You’re up to date' : 'No leads here yet'}</h2><p>{tab === 'today' ? 'Your scheduled follow-ups will appear here.' : data.viewer.canViewAllLeads ? 'Try another search or add a customer enquiry.' : 'Your assigned leads will appear here. You can also add a phone or WhatsApp enquiry.'}</p><button onClick={() => setAdding(true)}>Add a lead</button></div>}
